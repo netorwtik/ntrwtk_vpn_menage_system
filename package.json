@@ -1,0 +1,44 @@
+{
+  "name": "ntrwtk-vpn-management-system",
+  "version": "0.1.0",
+  "description": "Telegram bot for tracking confirmed VPN subscription payments.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/app.ts",
+    "start": "node dist/app.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@date-fns/tz": "^1.5.0",
+    "@prisma/client": "^6.19.3",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.4.2",
+    "pino": "^10.3.1",
+    "telegraf": "^4.16.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.1",
+    "eslint": "^10.4.0",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "prisma": "^6.19.3",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.0"
+  }
+}

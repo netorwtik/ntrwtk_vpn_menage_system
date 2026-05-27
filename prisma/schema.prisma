@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE   @map("active")
+  PAUSED   @map("paused")
+  DISABLED @map("disabled")
+}
+
+enum PaymentSource {
+  ADMIN_MANUAL    @map("admin_manual")
+  CLAIM_CONFIRMED @map("claim_confirmed")
+}
+
+enum PaymentClaimStatus {
+  PENDING   @map("pending")
+  CONFIRMED @map("confirmed")
+  REJECTED  @map("rejected")
+}
+
+model User {
+  id               String         @id @default(uuid()) @db.Uuid
+  name             String
+  telegramUsername String?        @unique @map("telegram_username")
+  telegramId       BigInt?        @unique @map("telegram_id")
+  monthlyPrice     Decimal        @map("monthly_price") @db.Decimal(10, 2)
+  status           UserStatus     @default(ACTIVE)
+  startedAt        DateTime       @default(now()) @map("started_at") @db.Date
+  paidUntil        DateTime?      @map("paid_until") @db.Date
+  comment          String?
+  payments         Payment[]
+  paymentClaims    PaymentClaim[]
+  invites          UserInvite[]
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  @@index([status, paidUntil])
+  @@map("users")
+}
+
+model UserInvite {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash           String    @unique @map("token_hash")
+  expiresAt           DateTime  @map("expires_at")
+  usedAt              DateTime? @map("used_at")
+  usedByTelegramId    BigInt?   @map("used_by_telegram_id")
+  createdByTelegramId BigInt    @map("created_by_telegram_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("user_invites")
+}
+
+model Payment {
+  id                    String        @id @default(uuid()) @db.Uuid
+  userId                String        @map("user_id") @db.Uuid
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  amount                Decimal       @db.Decimal(10, 2)
+  paymentMethod         String?       @map("payment_method")
+  source                PaymentSource @default(ADMIN_MANUAL)
+  confirmedByTelegramId BigInt        @map("confirmed_by_telegram_id")
+  paymentDate           DateTime      @default(now()) @map("payment_date") @db.Date
+  periodStart           DateTime      @map("period_start") @db.Date
+  periodEnd             DateTime      @map("period_end") @db.Date
+  comment               String?
+  paymentClaim          PaymentClaim?
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, paymentDate])
+  @@map("payments")
+}
+
+model PaymentClaim {
+  id         String             @id @default(uuid()) @db.Uuid
+  userId     String             @map("user_id") @db.Uuid
+  user       User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  amount     Decimal            @db.Decimal(10, 2)
+  status     PaymentClaimStatus @default(PENDING)
+  paymentId  String?            @unique @map("payment_id") @db.Uuid
+  payment    Payment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  reviewedAt DateTime?          @map("reviewed_at")
+  reviewedBy BigInt?            @map("reviewed_by")
+
+  @@index([userId, status, createdAt])
+  @@map("payment_claims")
+}
