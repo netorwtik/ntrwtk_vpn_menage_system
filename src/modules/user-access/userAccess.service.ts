@@ -21,6 +21,11 @@ const STATUS_LABELS: Record<UserStatus, string> = {
   [UserStatus.DISABLED]: 'отключен',
 };
 
+export interface PaymentCard {
+  message: string;
+  paymentRequired: boolean;
+}
+
 export class UserAccessService {
   public constructor(
     private readonly repository: UserAccessRepository,
@@ -120,6 +125,12 @@ export class UserAccessService {
   }
 
   public async getPaymentCardMessage(telegramId: number): Promise<string> {
+    const paymentCard = await this.getPaymentCard(telegramId);
+
+    return paymentCard.message;
+  }
+
+  public async getPaymentCard(telegramId: number): Promise<PaymentCard> {
     const user = await this.repository.findByTelegramId(BigInt(telegramId));
 
     if (user === null) {
@@ -127,6 +138,13 @@ export class UserAccessService {
         'Ваш аккаунт ещё не привязан к VPN-профилю. Получите персональную ссылку у администратора.',
         'USER_NOT_LINKED',
       );
+    }
+
+    if (!this.isPaymentRequired(user)) {
+      return {
+        message: this.formatPaymentNotRequired(user),
+        paymentRequired: false,
+      };
     }
 
     const paymentInstructions = [
@@ -141,23 +159,26 @@ export class UserAccessService {
         : [`• Для связи: ${this.paymentInfo.supportUsername}`]),
     ];
 
-    return [
-      '💳 Оплата VPN',
-      '━━━━━━━━━━━━━━━━━━━━',
-      '',
-      '📌 Ваш тариф',
-      `• К оплате: ${formatMoney(user.monthlyPrice)}`,
-      `• Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
-      '',
-      '🏦 Как оплатить',
-      'Переведите деньги удобным способом вне бота.',
-      ...(paymentInstructions.length === 0
-        ? ['• Для получения реквизитов напишите администратору.']
-        : paymentInstructions),
-      '',
-      '✅ После перевода нажмите «Я оплатил».',
-      'Доступ будет продлён после проверки.',
-    ].join('\n');
+    return {
+      message: [
+        '💳 Оплата VPN',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '📌 Ваш тариф',
+        `• К оплате: ${formatMoney(user.monthlyPrice)}`,
+        `• Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
+        '',
+        '🏦 Как оплатить',
+        'Переведите деньги удобным способом вне бота.',
+        ...(paymentInstructions.length === 0
+          ? ['• Для получения реквизитов напишите администратору.']
+          : paymentInstructions),
+        '',
+        '✅ После перевода нажмите «Я оплатил».',
+        'Доступ будет продлён после проверки.',
+      ].join('\n'),
+      paymentRequired: true,
+    };
   }
 
   private formatStatus(user: AccessUser): string {
@@ -205,6 +226,52 @@ export class UserAccessService {
       `• Следующая оплата: ${formatDate(addCalendarDays(user.paidUntil, 1))}`,
       `• Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
     ].join('\n');
+  }
+
+  private formatPaymentNotRequired(user: AccessUser): string {
+    const today = currentCalendarDate(this.timeZone);
+
+    if (user.status !== UserStatus.ACTIVE) {
+      return [
+        `📋 Ваш VPN-профиль: ${STATUS_LABELS[user.status]}.`,
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Сейчас оплата через бот не требуется.',
+        `• Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+        `• Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
+        '',
+        'Если нужно восстановить доступ, напишите администратору.',
+      ].join('\n');
+    }
+
+    if (user.paidUntil === null) {
+      return this.formatStatus(user);
+    }
+
+    const daysLeft = differenceInDays(user.paidUntil, today);
+
+    return [
+      '✅ Оплата пока не требуется.',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      'Ваш VPN-доступ активен.',
+      `• Оплачено до: ${formatDate(user.paidUntil)}`,
+      `• Осталось дней: ${daysLeft}`,
+      `• Следующая оплата: ${formatDate(addCalendarDays(user.paidUntil, 1))}`,
+      `• Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+    ].join('\n');
+  }
+
+  private isPaymentRequired(user: AccessUser): boolean {
+    if (user.status !== UserStatus.ACTIVE) {
+      return false;
+    }
+
+    if (user.paidUntil === null) {
+      return true;
+    }
+
+    return differenceInDays(user.paidUntil, currentCalendarDate(this.timeZone)) < 0;
   }
 
   private normalizeUsername(value: string): string {

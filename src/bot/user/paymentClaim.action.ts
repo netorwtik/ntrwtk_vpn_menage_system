@@ -15,6 +15,10 @@ function statusCardKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
   return Markup.inlineKeyboard([[Markup.button.callback('💳 Оплата', 'user_payment_card')]]);
 }
 
+function paymentNotRequiredKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
+  return Markup.inlineKeyboard([[Markup.button.callback('📋 Мой статус', 'user_status_card')]]);
+}
+
 function claimSentKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
   return Markup.inlineKeyboard([
     [Markup.button.callback('📋 Мой статус', 'user_status_card')],
@@ -26,8 +30,15 @@ async function createClaimAndNotifyAdmins(
   context: Context,
   telegramId: number,
   paymentClaimsService: PaymentClaimsService,
+  userAccessService: UserAccessService,
   adminTelegramIds: ReadonlySet<number>,
 ): Promise<string> {
+  const paymentCard = await userAccessService.getPaymentCard(telegramId);
+
+  if (!paymentCard.paymentRequired) {
+    return paymentCard.message;
+  }
+
   const result = await paymentClaimsService.createClaim(telegramId);
 
   if (result.adminNotification !== null && result.claim !== null) {
@@ -54,17 +65,21 @@ export function registerPaymentClaimAction(
   adminTelegramIds: ReadonlySet<number>,
 ): void {
   bot.hears(['💳 Оплата', 'Оплата'], async (context) => {
+    const paymentCard = await userAccessService.getPaymentCard(context.from.id);
+
     await context.reply(
-      await userAccessService.getPaymentCardMessage(context.from.id),
-      paymentCardKeyboard(),
+      paymentCard.message,
+      paymentCard.paymentRequired ? paymentCardKeyboard() : paymentNotRequiredKeyboard(),
     );
   });
 
   bot.action('user_payment_card', async (context) => {
+    const paymentCard = await userAccessService.getPaymentCard(context.from.id);
+
     await context.answerCbQuery();
     await context.editMessageText(
-      await userAccessService.getPaymentCardMessage(context.from.id),
-      paymentCardKeyboard(),
+      paymentCard.message,
+      paymentCard.paymentRequired ? paymentCardKeyboard() : paymentNotRequiredKeyboard(),
     );
   });
 
@@ -81,10 +96,18 @@ export function registerPaymentClaimAction(
       context,
       context.from.id,
       paymentClaimsService,
+      userAccessService,
       adminTelegramIds,
     );
-    await context.answerCbQuery('Заявка отправлена');
-    await context.editMessageText(message, claimSentKeyboard());
+    const paymentCard = await userAccessService.getPaymentCard(context.from.id);
+
+    await context.answerCbQuery(
+      paymentCard.paymentRequired ? 'Заявка отправлена' : 'Платить пока не нужно',
+    );
+    await context.editMessageText(
+      message,
+      paymentCard.paymentRequired ? claimSentKeyboard() : paymentNotRequiredKeyboard(),
+    );
   });
 
   bot.hears(['✅ Я оплатил', 'Я оплатил'], async (context) => {
@@ -93,6 +116,7 @@ export function registerPaymentClaimAction(
         context,
         context.from.id,
         paymentClaimsService,
+        userAccessService,
         adminTelegramIds,
       ),
       userStatusKeyboard(),
