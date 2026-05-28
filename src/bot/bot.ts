@@ -7,6 +7,9 @@ import { PaymentClaimsRepository } from '../modules/payment-claims/paymentClaims
 import { PaymentClaimsService } from '../modules/payment-claims/paymentClaims.service.js';
 import { PaymentsRepository } from '../modules/payments/payments.repository.js';
 import { PaymentsService } from '../modules/payments/payments.service.js';
+import { RemindersRepository } from '../modules/reminders/reminders.repository.js';
+import { RemindersScheduler } from '../modules/reminders/reminders.scheduler.js';
+import { RemindersService } from '../modules/reminders/reminders.service.js';
 import { UserAccessRepository } from '../modules/user-access/userAccess.repository.js';
 import { UserAccessService } from '../modules/user-access/userAccess.service.js';
 import { UsersRepository } from '../modules/users/users.repository.js';
@@ -22,6 +25,7 @@ import { registerInviteCommand } from './admin/commands/invite.command.js';
 import { registerPaidCommand } from './admin/commands/paid.command.js';
 import { registerRemindCommand } from './admin/commands/remind.command.js';
 import { registerSetPriceCommand } from './admin/commands/setPrice.command.js';
+import { registerSetPaidUntilCommand } from './admin/commands/setPaidUntil.command.js';
 import { registerSetStatusCommand } from './admin/commands/setStatus.command.js';
 import { registerUsersCommand } from './admin/commands/users.command.js';
 import { adminOnly } from './admin/middlewares/adminOnly.middleware.js';
@@ -29,7 +33,12 @@ import { registerUserStartCommand } from './user/start.command.js';
 import { registerUserStatusCommand } from './user/status.command.js';
 import { registerPaymentClaimAction } from './user/paymentClaim.action.js';
 
-export function createBot(config: AppConfig, logger: Logger): Telegraf<Context> {
+export interface BotRuntime {
+  bot: Telegraf<Context>;
+  remindersScheduler: RemindersScheduler | null;
+}
+
+export function createBot(config: AppConfig, logger: Logger): BotRuntime {
   const bot = new Telegraf<Context>(config.botToken);
   const usersService = new UsersService(new UsersRepository(prisma), config.timeZone);
   const paymentsService = new PaymentsService(new PaymentsRepository(prisma), config.timeZone);
@@ -40,16 +49,40 @@ export function createBot(config: AppConfig, logger: Logger): Telegraf<Context> 
     config.inviteExpiresHours,
     config.paymentInfo,
   );
+  const remindersService = new RemindersService(
+    new RemindersRepository(prisma),
+    config.timeZone,
+    config.paymentInfo,
+    logger,
+  );
+  const remindersScheduler = config.remindersEnabled
+    ? new RemindersScheduler(
+        bot,
+        remindersService,
+        logger,
+        config.reminderSendHour,
+        config.reminderCheckIntervalMinutes,
+      )
+    : null;
 
   registerUserStartCommand(bot, userAccessService, config.adminTelegramIds);
   registerUserStatusCommand(bot, userAccessService);
   registerPaymentClaimAction(bot, paymentClaimsService, userAccessService, config.adminTelegramIds);
   bot.use(adminOnly(config.adminTelegramIds, logger));
-  registerAdminPanelCommand(bot, usersService, paymentClaimsService, config.remindDaysBefore);
+  registerAdminPanelCommand(
+    bot,
+    usersService,
+    paymentClaimsService,
+    paymentsService,
+    userAccessService,
+    remindersService,
+    config.remindDaysBefore,
+  );
   registerHelpCommand(bot);
   registerAddUserCommand(bot, usersService);
   registerUsersCommand(bot, usersService);
   registerSetPriceCommand(bot, usersService);
+  registerSetPaidUntilCommand(bot, usersService);
   registerSetStatusCommand(bot, usersService);
   registerPaidCommand(bot, paymentsService);
   registerHistoryCommand(bot, paymentsService);
@@ -83,13 +116,14 @@ export function createBot(config: AppConfig, logger: Logger): Telegraf<Context> 
     await context.reply('Не удалось выполнить команду. Попробуйте ещё раз.');
   });
 
-  return bot;
+  return { bot, remindersScheduler };
 }
 
 export async function startBot(
   bot: Telegraf<Context>,
   logger: Logger,
   adminTelegramIds: ReadonlySet<number>,
+  onStarted?: () => void,
 ): Promise<void> {
   const botInfo = await bot.telegram.getMe();
   bot.botInfo = botInfo;
@@ -101,6 +135,7 @@ export async function startBot(
     { command: 'add_user', description: 'Добавить пользователя VPN' },
     { command: 'users', description: 'Показать пользователей' },
     { command: 'set_price', description: 'Изменить тариф пользователя' },
+    { command: 'set_paid_until', description: 'Исправить дату оплаты' },
     { command: 'set_status', description: 'Изменить статус пользователя' },
     { command: 'paid', description: 'Подтвердить полученную оплату' },
     { command: 'history', description: 'Показать историю оплат' },
@@ -125,6 +160,7 @@ export async function startBot(
     },
     () => {
       logger.info({ botUsername: botInfo.username }, 'Telegram-бот запущен в режиме polling');
+      onStarted?.();
     },
   );
 }

@@ -39,6 +39,29 @@ export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('ru-RU', DATE_FORMATTER_OPTIONS).format(date);
 }
 
+export function parseDisplayDate(value: string): Date | null {
+  const match = /^(?<day>\d{2})\.(?<month>\d{2})\.(?<year>\d{4})$/.exec(value.trim());
+
+  if (match?.groups === undefined) {
+    return null;
+  }
+
+  const day = Number(match.groups.day);
+  const month = Number(match.groups.month);
+  const year = Number(match.groups.year);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
 export function differenceInDays(date: Date, relativeTo: Date): number {
   const millisecondsInDay = 24 * 60 * 60 * 1000;
 

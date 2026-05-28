@@ -1,6 +1,13 @@
 import { UserStatus } from '@prisma/client';
 
-import { currentCalendarDate, differenceInDays, formatDate } from '../../shared/date/date.utils.js';
+import {
+  addCalendarDays,
+  addCalendarMonths,
+  currentCalendarDate,
+  differenceInDays,
+  formatDate,
+  parseDisplayDate,
+} from '../../shared/date/date.utils.js';
 import { AppError } from '../../shared/errors/app-error.js';
 import { formatMoney, parsePositiveAmount } from '../../shared/money/money.utils.js';
 import type { UserListItem } from './users.types.js';
@@ -28,6 +35,11 @@ export interface SetPriceRequest {
 export interface SetStatusRequest {
   telegramUsername: string;
   status: string;
+}
+
+export interface SetPaidUntilRequest {
+  telegramUsername: string;
+  paidUntil: string;
 }
 
 export interface AdminDashboardStats {
@@ -72,6 +84,25 @@ export class UsersService {
     return this.usersRepository.findAll();
   }
 
+  public async getUserCard(userId: string): Promise<string> {
+    const user = await this.requireById(userId);
+    const today = currentCalendarDate(this.timeZone);
+
+    return [
+      `👤 ${user.name}`,
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      '📌 Профиль',
+      `• Username: ${user.telegramUsername ?? '-'}`,
+      `• Статус: ${STATUS_LABELS[user.status]}`,
+      `• Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+      '',
+      '💳 Оплата',
+      `• Оплачено до: ${this.formatPaidUntil(user.paidUntil, today)}`,
+      `• Дата старта: ${formatDate(user.startedAt)}`,
+    ].join('\n');
+  }
+
   public async getAdminDashboardStats(daysBefore: number): Promise<AdminDashboardStats> {
     const today = currentCalendarDate(this.timeZone);
     const users = await this.usersRepository.findAll();
@@ -100,13 +131,57 @@ export class UsersService {
     return this.usersRepository.updateStatus(user.id, status);
   }
 
+  public async setPaidUntil(request: SetPaidUntilRequest): Promise<UserListItem> {
+    const user = await this.requireByUsername(request.telegramUsername);
+    const paidUntil = this.parsePaidUntil(request.paidUntil);
+
+    return this.usersRepository.updatePaidUntil(user.id, paidUntil);
+  }
+
+  public async setPaidUntilByUserId(userId: string, paidUntilValue: string): Promise<UserListItem> {
+    const user = await this.requireById(userId);
+    const paidUntil = this.parsePaidUntil(paidUntilValue);
+
+    return this.usersRepository.updatePaidUntil(user.id, paidUntil);
+  }
+
+  public async adjustPaidUntilByUserId(userId: string, adjustment: string): Promise<UserListItem> {
+    const user = await this.requireById(userId);
+
+    if (adjustment === 'none') {
+      return this.usersRepository.updatePaidUntil(user.id, null);
+    }
+
+    const baseDate = user.paidUntil ?? currentCalendarDate(this.timeZone);
+
+    switch (adjustment) {
+      case 'p1m':
+      case 'plus_1_month':
+        return this.usersRepository.updatePaidUntil(user.id, addCalendarMonths(baseDate, 1));
+      case 'm1m':
+      case 'minus_1_month':
+        return this.usersRepository.updatePaidUntil(user.id, addCalendarMonths(baseDate, -1));
+      case 'p7d':
+      case 'plus_7_days':
+        return this.usersRepository.updatePaidUntil(user.id, addCalendarDays(baseDate, 7));
+      case 'm7d':
+      case 'minus_7_days':
+        return this.usersRepository.updatePaidUntil(user.id, addCalendarDays(baseDate, -7));
+      default:
+        throw new AppError(
+          'Неизвестная корректировка даты оплаты.',
+          'INVALID_PAID_UNTIL_ADJUSTMENT',
+        );
+    }
+  }
+
   public async getDebtorsMessage(): Promise<string> {
     const today = currentCalendarDate(this.timeZone);
     const users = await this.usersRepository.findActive();
     const debtors = users.filter((user) => this.getDaysUntilDue(user, today) < 0);
 
     if (debtors.length === 0) {
-      return 'Просроченных оплат среди активных пользователей нет.';
+      return ['✅ Должники', '━━━━━━━━━━━━━━━━━━━━', '', 'Просроченных оплат нет.'].join('\n');
     }
 
     const rows = debtors.map((user, index) => {
@@ -114,11 +189,12 @@ export class UsersService {
 
       return [
         `${index + 1}. ${user.name} (${user.telegramUsername ?? '-'})`,
-        `Просрочка: ${overdueDays} дн. | К оплате: ${formatMoney(user.monthlyPrice)}`,
+        `   • Просрочка: ${overdueDays} дн.`,
+        `   • К оплате: ${formatMoney(user.monthlyPrice)}`,
       ].join('\n');
     });
 
-    return ['Должники:', '', ...rows].join('\n\n');
+    return ['⚠️ Должники', '━━━━━━━━━━━━━━━━━━━━', '', ...rows].join('\n\n');
   }
 
   public async getRemindersMessage(daysBefore: number): Promise<string> {
@@ -131,7 +207,12 @@ export class UsersService {
     });
 
     if (reminders.length === 0) {
-      return `Нет активных пользователей с оплатой в ближайшие ${daysBefore} дн. или просрочкой.`;
+      return [
+        '✅ Ближайшие оплаты',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        `Нет активных пользователей с оплатой в ближайшие ${daysBefore} дн. или просрочкой.`,
+      ].join('\n');
     }
 
     const rows = reminders.map((user, index) => {
@@ -139,11 +220,19 @@ export class UsersService {
 
       return [
         `${index + 1}. ${user.name} (${user.telegramUsername ?? '-'})`,
-        `${this.formatReminderState(user, daysUntilDue)} | К оплате: ${formatMoney(user.monthlyPrice)}`,
+        `   • ${this.formatReminderState(user, daysUntilDue)}`,
+        `   • К оплате: ${formatMoney(user.monthlyPrice)}`,
       ].join('\n');
     });
 
-    return [`Напоминания (срок до ${daysBefore} дн.):`, '', ...rows].join('\n\n');
+    return [
+      '⏰ Ближайшие оплаты',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      `Порог: ${daysBefore} дн.`,
+      '',
+      ...rows,
+    ].join('\n\n');
   }
 
   public formatCreatedUser(user: UserListItem): string {
@@ -159,19 +248,32 @@ export class UsersService {
 
   public formatUsersList(users: UserListItem[]): string {
     if (users.length === 0) {
-      return 'Пользователей пока нет. Добавьте первого командой /add_user.';
+      return [
+        '👥 Пользователи',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Пользователей пока нет. Добавьте первого командой /add_user.',
+      ].join('\n');
     }
 
     const today = currentCalendarDate(this.timeZone);
     const rows = users.map((user, index) => {
       return [
         `${index + 1}. ${user.name} (${user.telegramUsername ?? '-'})`,
-        `Тариф: ${formatMoney(user.monthlyPrice)} / месяц | Статус: ${STATUS_LABELS[user.status]}`,
-        `Оплачено до: ${this.formatPaidUntil(user.paidUntil, today)}`,
+        `   • Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+        `   • Статус: ${STATUS_LABELS[user.status]}`,
+        `   • Оплачено до: ${this.formatPaidUntil(user.paidUntil, today)}`,
       ].join('\n');
     });
 
-    return [`Пользователи: ${users.length}`, '', ...rows].join('\n\n');
+    return [
+      '👥 Пользователи',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      `Всего: ${users.length}`,
+      '',
+      ...rows,
+    ].join('\n\n');
   }
 
   public formatUpdatedPrice(user: UserListItem): string {
@@ -189,6 +291,16 @@ export class UsersService {
       '',
       `${user.name} (${user.telegramUsername ?? '-'})`,
       `Новый статус: ${STATUS_LABELS[user.status]}`,
+    ].join('\n');
+  }
+
+  public formatUpdatedPaidUntil(user: UserListItem): string {
+    return [
+      '✅ Дата оплаты обновлена',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      `👤 ${user.name} (${user.telegramUsername ?? '-'})`,
+      `• Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
     ].join('\n');
   }
 
@@ -216,6 +328,16 @@ export class UsersService {
     return user;
   }
 
+  private async requireById(userId: string): Promise<UserListItem> {
+    const user = await this.usersRepository.findById(userId);
+
+    if (user === null) {
+      throw new AppError('Пользователь не найден.', 'USER_NOT_FOUND');
+    }
+
+    return user;
+  }
+
   private parseStatus(value: string): UserStatus {
     switch (value.trim().toLowerCase()) {
       case 'active':
@@ -230,6 +352,23 @@ export class UsersService {
           'INVALID_USER_STATUS',
         );
     }
+  }
+
+  private parsePaidUntil(value: string): Date | null {
+    if (value.trim().toLowerCase() === 'none') {
+      return null;
+    }
+
+    const date = parseDisplayDate(value);
+
+    if (date === null) {
+      throw new AppError(
+        'Дата должна быть в формате DD.MM.YYYY или none, чтобы сбросить оплату.',
+        'INVALID_PAID_UNTIL',
+      );
+    }
+
+    return date;
   }
 
   private formatPaidUntil(paidUntil: Date | null, today: Date): string {

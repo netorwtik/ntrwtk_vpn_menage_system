@@ -6,7 +6,7 @@ import { createLogger } from './shared/logger/logger.js';
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
   const logger = createLogger(config);
-  const bot = createBot(config, logger);
+  const { bot, remindersScheduler } = createBot(config, logger);
   let launched = false;
   let stopping = false;
 
@@ -17,6 +17,7 @@ async function bootstrap(): Promise<void> {
 
     stopping = true;
     logger.info({ reason }, 'Остановка приложения');
+    remindersScheduler?.stop();
 
     if (launched) {
       try {
@@ -42,7 +43,7 @@ async function bootstrap(): Promise<void> {
     logger.info('Подключение к PostgreSQL установлено');
 
     launched = true;
-    await startBot(bot, logger, config.adminTelegramIds);
+    await startBot(bot, logger, config.adminTelegramIds, () => remindersScheduler?.start());
   } catch (error) {
     logger.fatal({ err: error }, 'Не удалось запустить приложение');
     await shutdown('startup_error');

@@ -24,12 +24,16 @@ export class PaymentClaimsService {
   public formatPendingClaim(claim: PendingPaymentClaim): string {
     return [
       '🧾 Заявка об оплате',
+      '━━━━━━━━━━━━━━━━━━━━',
       '',
-      `Пользователь: ${claim.user.name} (${claim.user.telegramUsername ?? '-'})`,
-      `Сумма: ${formatMoney(claim.amount)}`,
-      `Тариф: ${formatMoney(claim.user.monthlyPrice)} / месяц`,
-      `Оплачено до: ${claim.user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(claim.user.paidUntil)}`,
-      `Заявка создана: ${formatDate(claim.createdAt)}`,
+      '👤 Пользователь',
+      `• ${claim.user.name} (${claim.user.telegramUsername ?? '-'})`,
+      '',
+      '💳 Оплата',
+      `• Сумма: ${formatMoney(claim.amount)}`,
+      `• Тариф: ${formatMoney(claim.user.monthlyPrice)} / месяц`,
+      `• Оплачено до: ${claim.user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(claim.user.paidUntil)}`,
+      `• Заявка создана: ${formatDate(claim.createdAt)}`,
     ].join('\n');
   }
 
@@ -61,10 +65,11 @@ export class PaymentClaimsService {
         'Заявка об оплате отправлена администратору. Доступ будет продлён только после подтверждения перевода.',
       adminNotification: [
         '🧾 Пользователь сообщил об оплате.',
+        '━━━━━━━━━━━━━━━━━━━━',
         '',
-        `${result.claim.user.name} (${result.claim.user.telegramUsername ?? '-'})`,
-        `Ожидаемая сумма: ${formatMoney(result.claim.amount)}`,
-        `Дата заявки: ${formatDate(result.claim.createdAt)}`,
+        `• ${result.claim.user.name} (${result.claim.user.telegramUsername ?? '-'})`,
+        `• Ожидаемая сумма: ${formatMoney(result.claim.amount)}`,
+        `• Дата заявки: ${formatDate(result.claim.createdAt)}`,
       ].join('\n'),
       claim: result.claim,
     };

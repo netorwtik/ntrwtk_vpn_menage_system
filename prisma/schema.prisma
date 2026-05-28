@@ -24,21 +24,26 @@ enum PaymentClaimStatus {
   REJECTED  @map("rejected")
 }
 
+enum ReminderKind {
+  PAYMENT_OVERDUE @map("payment_overdue")
+}
+
 model User {
-  id               String         @id @default(uuid()) @db.Uuid
-  name             String
-  telegramUsername String?        @unique @map("telegram_username")
-  telegramId       BigInt?        @unique @map("telegram_id")
-  monthlyPrice     Decimal        @map("monthly_price") @db.Decimal(10, 2)
-  status           UserStatus     @default(ACTIVE)
-  startedAt        DateTime       @default(now()) @map("started_at") @db.Date
-  paidUntil        DateTime?      @map("paid_until") @db.Date
-  comment          String?
-  payments         Payment[]
-  paymentClaims    PaymentClaim[]
-  invites          UserInvite[]
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @updatedAt @map("updated_at")
+  id                 String             @id @default(uuid()) @db.Uuid
+  name               String
+  telegramUsername   String?            @unique @map("telegram_username")
+  telegramId         BigInt?            @unique @map("telegram_id")
+  monthlyPrice       Decimal            @map("monthly_price") @db.Decimal(10, 2)
+  status             UserStatus         @default(ACTIVE)
+  startedAt          DateTime           @default(now()) @map("started_at") @db.Date
+  paidUntil          DateTime?          @map("paid_until") @db.Date
+  comment            String?
+  payments           Payment[]
+  paymentClaims      PaymentClaim[]
+  invites            UserInvite[]
+  reminderDeliveries ReminderDelivery[]
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
 
   @@index([status, paidUntil])
   @@map("users")
@@ -92,4 +97,18 @@ model PaymentClaim {
 
   @@index([userId, status, createdAt])
   @@map("payment_claims")
+}
+
+model ReminderDelivery {
+  id                String       @id @default(uuid()) @db.Uuid
+  userId            String       @map("user_id") @db.Uuid
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind              ReminderKind
+  reminderDate      DateTime     @map("reminder_date") @db.Date
+  telegramMessageId Int?         @map("telegram_message_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  @@unique([userId, kind, reminderDate])
+  @@index([kind, reminderDate])
+  @@map("reminder_deliveries")
 }

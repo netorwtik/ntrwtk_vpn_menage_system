@@ -88,6 +88,31 @@ export class PaymentsRepository {
     return { user: paymentUser, payments };
   }
 
+  public async findHistoryByUserId(
+    userId: string,
+    limit: number,
+  ): Promise<PaymentHistoryResult | null> {
+    const user = await this.database.user.findUnique({
+      where: { id: userId },
+      select: {
+        ...USER_SELECT,
+        payments: {
+          orderBy: [{ paymentDate: 'desc' }, { createdAt: 'desc' }],
+          take: limit,
+          select: PAYMENT_SELECT,
+        },
+      },
+    });
+
+    if (user === null) {
+      return null;
+    }
+
+    const { payments, ...paymentUser } = user;
+
+    return { user: paymentUser, payments };
+  }
+
   public async confirmPendingClaim(
     claimId: string,
     buildPaymentData: (

@@ -132,25 +132,31 @@ export class UserAccessService {
     const paymentInstructions = [
       ...(this.paymentInfo.recipient === undefined
         ? []
-        : [`Получатель: ${this.paymentInfo.recipient}`]),
-      ...(this.paymentInfo.details === undefined ? [] : [`Реквизиты: ${this.paymentInfo.details}`]),
+        : [`• Получатель: ${this.paymentInfo.recipient}`]),
+      ...(this.paymentInfo.details === undefined
+        ? []
+        : [`• Реквизиты: ${this.paymentInfo.details}`]),
       ...(this.paymentInfo.supportUsername === undefined
         ? []
-        : [`Для связи: ${this.paymentInfo.supportUsername}`]),
+        : [`• Для связи: ${this.paymentInfo.supportUsername}`]),
     ];
 
     return [
       '💳 Оплата VPN',
+      '━━━━━━━━━━━━━━━━━━━━',
       '',
-      `К оплате: ${formatMoney(user.monthlyPrice)}`,
-      `Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
+      '📌 Ваш тариф',
+      `• К оплате: ${formatMoney(user.monthlyPrice)}`,
+      `• Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
       '',
+      '🏦 Как оплатить',
       'Переведите деньги удобным способом вне бота.',
       ...(paymentInstructions.length === 0
-        ? ['Для получения реквизитов напишите администратору.']
+        ? ['• Для получения реквизитов напишите администратору.']
         : paymentInstructions),
       '',
-      'После перевода нажмите «Я оплатил». Доступ будет продлён после проверки.',
+      '✅ После перевода нажмите «Я оплатил».',
+      'Доступ будет продлён после проверки.',
     ].join('\n');
   }
 
@@ -160,18 +166,20 @@ export class UserAccessService {
     if (user.status !== UserStatus.ACTIVE) {
       return [
         `📋 Ваш VPN-профиль: ${STATUS_LABELS[user.status]}.`,
+        '━━━━━━━━━━━━━━━━━━━━',
         '',
-        `Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
-        `Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
+        `• Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+        `• Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
       ].join('\n');
     }
 
     if (user.paidUntil === null) {
       return [
         '⚠️ Ваш VPN-доступ требует оплаты.',
+        '━━━━━━━━━━━━━━━━━━━━',
         '',
         'Оплата ещё не подтверждена.',
-        `К оплате: ${formatMoney(user.monthlyPrice)}`,
+        `• К оплате: ${formatMoney(user.monthlyPrice)}`,
       ].join('\n');
     }
 
@@ -180,20 +188,22 @@ export class UserAccessService {
     if (daysLeft < 0) {
       return [
         '⚠️ Ваш VPN-доступ требует оплаты.',
+        '━━━━━━━━━━━━━━━━━━━━',
         '',
-        `Оплачено до: ${formatDate(user.paidUntil)}`,
-        `Просрочка: ${Math.abs(daysLeft)} дн.`,
-        `К оплате: ${formatMoney(user.monthlyPrice)}`,
+        `• Оплачено до: ${formatDate(user.paidUntil)}`,
+        `• Просрочка: ${Math.abs(daysLeft)} дн.`,
+        `• К оплате: ${formatMoney(user.monthlyPrice)}`,
       ].join('\n');
     }
 
     return [
       '✅ Ваш VPN-доступ активен.',
+      '━━━━━━━━━━━━━━━━━━━━',
       '',
-      `Оплачено до: ${formatDate(user.paidUntil)}`,
-      `Осталось дней: ${daysLeft}`,
-      `Следующая оплата: ${formatDate(addCalendarDays(user.paidUntil, 1))}`,
-      `Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+      `• Оплачено до: ${formatDate(user.paidUntil)}`,
+      `• Осталось дней: ${daysLeft}`,
+      `• Следующая оплата: ${formatDate(addCalendarDays(user.paidUntil, 1))}`,
+      `• Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
     ].join('\n');
   }
 

@@ -35,6 +35,21 @@ export class UsersRepository {
     });
   }
 
+  public async findById(id: string): Promise<UserListItem | null> {
+    return this.database.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        telegramUsername: true,
+        monthlyPrice: true,
+        status: true,
+        startedAt: true,
+        paidUntil: true,
+      },
+    });
+  }
+
   public async findAll(): Promise<UserListItem[]> {
     return this.database.user.findMany({
       orderBy: [{ status: 'asc' }, { name: 'asc' }],
@@ -86,6 +101,22 @@ export class UsersRepository {
     return this.database.user.update({
       where: { id },
       data: { status },
+      select: {
+        id: true,
+        name: true,
+        telegramUsername: true,
+        monthlyPrice: true,
+        status: true,
+        startedAt: true,
+        paidUntil: true,
+      },
+    });
+  }
+
+  public async updatePaidUntil(id: string, paidUntil: Date | null): Promise<UserListItem> {
+    return this.database.user.update({
+      where: { id },
+      data: { paidUntil },
       select: {
         id: true,
         name: true,

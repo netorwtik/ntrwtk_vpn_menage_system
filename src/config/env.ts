@@ -8,6 +8,24 @@ const optionalText = z.preprocess(
   (value) => (typeof value === 'string' && value.trim().length === 0 ? undefined : value),
   z.string().trim().min(1).optional(),
 );
+const booleanFromString = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  switch (value.trim().toLowerCase()) {
+    case 'true':
+    case '1':
+    case 'yes':
+      return true;
+    case 'false':
+    case '0':
+    case 'no':
+      return false;
+    default:
+      return value;
+  }
+}, z.boolean());
 
 const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -20,6 +38,9 @@ const environmentSchema = z.object({
   TZ: z.string().trim().min(1).default('Europe/Moscow'),
   LOG_LEVEL: z.enum(logLevels).default('info'),
   REMIND_DAYS_BEFORE: z.coerce.number().int().nonnegative().default(3),
+  REMINDERS_ENABLED: booleanFromString.default(true),
+  REMINDER_SEND_HOUR: z.coerce.number().int().min(0).max(23).default(10),
+  REMINDER_CHECK_INTERVAL_MINUTES: z.coerce.number().int().positive().max(1440).default(60),
   INVITE_EXPIRES_HOURS: z.coerce.number().int().positive().max(720).default(168),
   SUPPORT_USERNAME: optionalText,
   PAYMENT_RECIPIENT: optionalText,
@@ -40,6 +61,9 @@ export interface AppConfig {
   timeZone: string;
   logLevel: (typeof logLevels)[number];
   remindDaysBefore: number;
+  remindersEnabled: boolean;
+  reminderSendHour: number;
+  reminderCheckIntervalMinutes: number;
   inviteExpiresHours: number;
   paymentInfo: PaymentInfoConfig;
 }
@@ -88,6 +112,9 @@ export function loadConfig(): AppConfig {
     timeZone: env.TZ,
     logLevel: env.LOG_LEVEL,
     remindDaysBefore: env.REMIND_DAYS_BEFORE,
+    remindersEnabled: env.REMINDERS_ENABLED,
+    reminderSendHour: env.REMINDER_SEND_HOUR,
+    reminderCheckIntervalMinutes: env.REMINDER_CHECK_INTERVAL_MINUTES,
     inviteExpiresHours: env.INVITE_EXPIRES_HOURS,
     paymentInfo: {
       ...(env.SUPPORT_USERNAME === undefined ? {} : { supportUsername: env.SUPPORT_USERNAME }),

@@ -4,7 +4,7 @@ import type { PaymentClaimsService } from '../../modules/payment-claims/paymentC
 import type { UserAccessService } from '../../modules/user-access/userAccess.service.js';
 import { userStatusKeyboard } from './status.keyboard.js';
 
-function paymentCardKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
+export function paymentCardKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
   return Markup.inlineKeyboard([
     [Markup.button.callback('✅ Я оплатил', 'user_claim_payment')],
     [Markup.button.callback('📋 Мой статус', 'user_status_card')],

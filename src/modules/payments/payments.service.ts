@@ -9,7 +9,11 @@ import {
 import { AppError } from '../../shared/errors/app-error.js';
 import { formatMoney, parsePositiveAmount } from '../../shared/money/money.utils.js';
 import type { PaymentsRepository } from './payments.repository.js';
-import type { ConfirmedPaymentResult, PaymentUser } from './payments.types.js';
+import type {
+  ConfirmedPaymentResult,
+  PaymentHistoryResult,
+  PaymentUser,
+} from './payments.types.js';
 
 const USERNAME_PATTERN = /^@[A-Za-z0-9_]{5,32}$/;
 const PAYMENT_METHOD_PATTERN = /^[\p{L}\p{N}_-]{2,32}$/u;
@@ -112,8 +116,22 @@ export class PaymentsService {
       throw new AppError(`Пользователь ${telegramUsername} не найден.`, 'USER_NOT_FOUND');
     }
 
+    return this.formatHistoryResult(result, telegramUsername);
+  }
+
+  public async getHistoryByUserId(userId: string): Promise<string> {
+    const result = await this.paymentsRepository.findHistoryByUserId(userId, HISTORY_LIMIT);
+
+    if (result === null) {
+      throw new AppError('Пользователь не найден.', 'USER_NOT_FOUND');
+    }
+
+    return this.formatHistoryResult(result, result.user.telegramUsername ?? '-');
+  }
+
+  private formatHistoryResult(result: PaymentHistoryResult, usernameLabel: string): string {
     if (result.payments.length === 0) {
-      return `Подтвержденных оплат для ${result.user.name} (${telegramUsername}) пока нет.`;
+      return `Подтвержденных оплат для ${result.user.name} (${usernameLabel}) пока нет.`;
     }
 
     const payments = result.payments.map((payment, index) => {
@@ -126,8 +144,11 @@ export class PaymentsService {
     });
 
     return [
-      `История оплат: ${result.user.name} (${telegramUsername})`,
-      `Оплачено до: ${result.user.paidUntil === null ? '-' : formatDate(result.user.paidUntil)}`,
+      `📜 История оплат`,
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      `👤 ${result.user.name} (${usernameLabel})`,
+      `• Оплачено до: ${result.user.paidUntil === null ? '-' : formatDate(result.user.paidUntil)}`,
       '',
       ...payments,
     ].join('\n\n');
@@ -137,13 +158,15 @@ export class PaymentsService {
     const months = result.payment.amount.dividedBy(result.user.monthlyPrice).toNumber();
 
     return [
-      'Оплата подтверждена.',
+      '✅ Оплата подтверждена',
+      '━━━━━━━━━━━━━━━━━━━━',
       '',
-      `${result.user.name} (${result.user.telegramUsername ?? '-'})`,
-      `Сумма: ${formatMoney(result.payment.amount)}`,
-      `Способ: ${result.payment.paymentMethod ?? 'не указан'}`,
-      `Период: ${formatDate(result.payment.periodStart)} - ${formatDate(result.payment.periodEnd)} (${months} мес.)`,
-      `Оплачено до: ${formatDate(result.payment.periodEnd)}`,
+      `👤 ${result.user.name} (${result.user.telegramUsername ?? '-'})`,
+      '',
+      `• Сумма: ${formatMoney(result.payment.amount)}`,
+      `• Способ: ${result.payment.paymentMethod ?? 'не указан'}`,
+      `• Период: ${formatDate(result.payment.periodStart)} - ${formatDate(result.payment.periodEnd)} (${months} мес.)`,
+      `• Оплачено до: ${formatDate(result.payment.periodEnd)}`,
     ].join('\n');
   }
 
