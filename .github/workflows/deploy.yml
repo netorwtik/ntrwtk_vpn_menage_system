@@ -1,0 +1,59 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.VPS_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Deploy over SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          APP_DIR: ${{ vars.APP_DIR || '/opt/ntrwtk-vpn-payment-bot' }}
+          REPO_URL: https://github.com/netorwtik/ntrwtk_vpn_menage_system.git
+          COMPOSE_FILE: docker-compose.prod.yml
+          COMPOSE_PROJECT_NAME: ntrwtk-vpn-payment-bot
+        run: |
+          ssh -i ~/.ssh/deploy_key "${VPS_USER}@${VPS_HOST}" \
+            "APP_DIR='${APP_DIR}' REPO_URL='${REPO_URL}' COMPOSE_FILE='${COMPOSE_FILE}' COMPOSE_PROJECT_NAME='${COMPOSE_PROJECT_NAME}' bash -s" <<'EOF'
+          set -euo pipefail
+
+          if [ ! -d "$APP_DIR/.git" ]; then
+            mkdir -p "$APP_DIR"
+            git clone "$REPO_URL" "$APP_DIR"
+          fi
+
+          cd "$APP_DIR"
+          git fetch --prune origin
+          git checkout main
+          git pull --ff-only origin main
+
+          if [ ! -f .env ]; then
+            echo "Missing $APP_DIR/.env. Create it from deploy/production.env.example before deploy." >&2
+            exit 1
+          fi
+
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d postgres
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" run --rm migrate
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --build bot
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" logs --tail=80 bot
+          EOF

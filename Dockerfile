@@ -19,6 +19,11 @@ RUN npx prisma generate
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
+FROM dependencies AS migrate
+
+COPY prisma ./prisma
+CMD ["npm", "run", "db:deploy"]
+
 FROM base AS runtime
 
 ENV NODE_ENV=production
