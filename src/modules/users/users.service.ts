@@ -175,6 +175,12 @@ export class UsersService {
     }
   }
 
+  public async deleteUser(userId: string): Promise<UserListItem> {
+    await this.requireById(userId);
+
+    return this.usersRepository.delete(userId);
+  }
+
   public async getDebtorsMessage(): Promise<string> {
     const today = currentCalendarDate(this.timeZone);
     const users = await this.usersRepository.findActive();
@@ -302,6 +308,10 @@ export class UsersService {
       `👤 ${user.name} (${user.telegramUsername ?? '-'})`,
       `• Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
     ].join('\n');
+  }
+
+  public formatDeletedUser(user: UserListItem): string {
+    return `Пользователь ${user.name} (${user.telegramUsername ?? '-'}) полностью удалён.`;
   }
 
   private normalizeUsername(value: string): string {

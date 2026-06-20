@@ -67,7 +67,7 @@ model UserInvite {
 model Payment {
   id                    String        @id @default(uuid()) @db.Uuid
   userId                String        @map("user_id") @db.Uuid
-  user                  User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount                Decimal       @db.Decimal(10, 2)
   paymentMethod         String?       @map("payment_method")
   source                PaymentSource @default(ADMIN_MANUAL)
@@ -86,7 +86,7 @@ model Payment {
 model PaymentClaim {
   id         String             @id @default(uuid()) @db.Uuid
   userId     String             @map("user_id") @db.Uuid
-  user       User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount     Decimal            @db.Decimal(10, 2)
   status     PaymentClaimStatus @default(PENDING)
   paymentId  String?            @unique @map("payment_id") @db.Uuid

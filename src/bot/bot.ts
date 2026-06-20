@@ -48,6 +48,7 @@ export function createBot(config: AppConfig, logger: Logger): BotRuntime {
     config.timeZone,
     config.inviteExpiresHours,
     config.paymentInfo,
+    config.adminTelegramIds,
   );
   const remindersService = new RemindersService(
     new RemindersRepository(prisma),

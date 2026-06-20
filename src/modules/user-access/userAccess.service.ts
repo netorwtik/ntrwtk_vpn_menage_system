@@ -32,6 +32,7 @@ export class UserAccessService {
     private readonly timeZone: string,
     private readonly inviteExpiresHours: number,
     private readonly paymentInfo: PaymentInfoConfig,
+    private readonly adminTelegramIds: ReadonlySet<number>,
   ) {}
 
   public async createInviteLink(
@@ -72,6 +73,13 @@ export class UserAccessService {
   }
 
   public async bindUser(token: string, telegramId: number): Promise<string> {
+    if (this.adminTelegramIds.has(telegramId)) {
+      throw new AppError(
+        'Администратор не может подключиться по пользовательской ссылке-приглашению.',
+        'ADMIN_CANNOT_BIND_INVITE',
+      );
+    }
+
     if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) {
       throw new AppError('Ссылка приглашения недействительна.', 'INVALID_INVITE_TOKEN');
     }

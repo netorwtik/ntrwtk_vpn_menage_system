@@ -23,6 +23,8 @@ const USER_NOTIFY_ACTION = /^un:([0-9a-f-]{36})$/;
 const USER_PAID_UNTIL_ACTION = /^up:([0-9a-f-]{36})$/;
 const USER_PAID_UNTIL_ADJUST_ACTION = /^upa:([0-9a-f-]{36}):(p1m|m1m|p7d|m7d|none)$/;
 const USER_PAID_UNTIL_INPUT_ACTION = /^upd:([0-9a-f-]{36})$/;
+const USER_DELETE_CONFIRM_ACTION = /^udq:([0-9a-f-]{36})$/;
+const USER_DELETE_ACTION = /^udc:([0-9a-f-]{36})$/;
 
 const paidUntilInputState = new Map<number, { userId: string }>();
 type AddUserStep = 'name' | 'username' | 'price' | 'comment';
@@ -68,6 +70,7 @@ function userCardKeyboard(userId: string): ReturnType<typeof Markup.inlineKeyboa
       Markup.button.callback('🔗 Invite', `ui:${userId}`),
       Markup.button.callback('🔔', `un:${userId}`),
     ],
+    [Markup.button.callback('🗑 Удалить пользователя', `udq:${userId}`)],
     [Markup.button.callback('⬅️ Назад к пользователям', USERS_ACTION)],
   ]);
 }
@@ -495,6 +498,46 @@ export function registerAdminPanelCommand(
         context.botInfo.username,
       ),
       Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад к карточке', `u:${userId}`)]]),
+    );
+  });
+
+  bot.action(USER_DELETE_CONFIRM_ACTION, async (context) => {
+    const userId = context.match[1];
+
+    if (userId === undefined) {
+      return;
+    }
+
+    await context.answerCbQuery();
+    await context.editMessageText(
+      [
+        '⚠️ Полное удаление пользователя',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        await usersService.getUserCard(userId),
+        '',
+        'Будут безвозвратно удалены оплаты, заявки, приглашения и история напоминаний.',
+        'Подтвердите удаление.',
+      ].join('\n'),
+      Markup.inlineKeyboard([
+        [Markup.button.callback('🗑 Да, удалить полностью', `udc:${userId}`)],
+        [Markup.button.callback('⬅️ Отмена', `u:${userId}`)],
+      ]),
+    );
+  });
+
+  bot.action(USER_DELETE_ACTION, async (context) => {
+    const userId = context.match[1];
+
+    if (userId === undefined) {
+      return;
+    }
+
+    const user = await usersService.deleteUser(userId);
+    await context.answerCbQuery('Пользователь удалён');
+    await context.editMessageText(
+      usersService.formatDeletedUser(user),
+      Markup.inlineKeyboard([[Markup.button.callback('⬅️ К пользователям', USERS_ACTION)]]),
     );
   });
 
