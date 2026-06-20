@@ -128,4 +128,19 @@ export class UsersRepository {
       },
     });
   }
+
+  public async delete(id: string): Promise<UserListItem> {
+    return this.database.user.delete({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        telegramUsername: true,
+        monthlyPrice: true,
+        status: true,
+        startedAt: true,
+        paidUntil: true,
+      },
+    });
+  }
 }

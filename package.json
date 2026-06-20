@@ -8,6 +8,7 @@
     "build": "tsc",
     "dev": "tsx watch src/app.ts",
     "start": "node dist/app.js",
+    "test": "tsx --test test/*.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
