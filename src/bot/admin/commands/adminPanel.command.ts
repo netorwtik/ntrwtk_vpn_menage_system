@@ -12,6 +12,7 @@ const CLAIMS_ACTION = 'admin_claims';
 const DEBTORS_ACTION = 'admin_debtors';
 const REMINDERS_ACTION = 'admin_reminders';
 const MANUAL_REMINDERS_ACTION = 'admin_manual_reminders';
+const UNLINKED_USERS_ACTION = 'admin_unlinked_users';
 const USERS_ACTION = 'admin_users';
 const ADD_USER_ACTION = 'admin_add_user';
 const CLAIM_ACTION = /^admin_claim:([0-9a-f-]{36})$/;
@@ -23,6 +24,8 @@ const USER_NOTIFY_ACTION = /^un:([0-9a-f-]{36})$/;
 const USER_PAID_UNTIL_ACTION = /^up:([0-9a-f-]{36})$/;
 const USER_PAID_UNTIL_ADJUST_ACTION = /^upa:([0-9a-f-]{36}):(p1m|m1m|p7d|m7d|none)$/;
 const USER_PAID_UNTIL_INPUT_ACTION = /^upd:([0-9a-f-]{36})$/;
+const USER_UNDO_PAYMENT_CONFIRM_ACTION = /^uuq:([0-9a-f-]{36})$/;
+const USER_UNDO_PAYMENT_ACTION = /^uuc:([0-9a-f-]{36})$/;
 const USER_DELETE_CONFIRM_ACTION = /^udq:([0-9a-f-]{36})$/;
 const USER_DELETE_ACTION = /^udc:([0-9a-f-]{36})$/;
 
@@ -66,6 +69,7 @@ function userCardKeyboard(userId: string): ReturnType<typeof Markup.inlineKeyboa
       Markup.button.callback('📜 История', `uh:${userId}`),
       Markup.button.callback('💳 Оплата', `up:${userId}`),
     ],
+    [Markup.button.callback('↩️ Отменить последнюю оплату', `uuq:${userId}`)],
     [
       Markup.button.callback('🔗 Invite', `ui:${userId}`),
       Markup.button.callback('🔔', `un:${userId}`),
@@ -112,6 +116,7 @@ async function getPanelMessage(
     `• Активных: ${stats.activeUsersCount}`,
     `• Должников: ${stats.debtorsCount}`,
     `• Скоро платить: ${stats.upcomingPaymentsCount}`,
+    `• Сумма в месяц: ${formatMoney(stats.monthlyTotal)}`,
     `• Заявок на подтверждение: ${claims.length}`,
     '',
     'Выберите раздел ниже.',
@@ -343,8 +348,18 @@ export function registerAdminPanelCommand(
         ...userButtons,
         [Markup.button.callback('➕ Добавить', ADD_USER_ACTION)],
         [Markup.button.callback('🔔', MANUAL_REMINDERS_ACTION)],
+        [Markup.button.callback('🔗 Без Telegram', UNLINKED_USERS_ACTION)],
         [Markup.button.callback('⬅️ Назад в панель', PANEL_ACTION)],
       ]),
+    );
+  });
+
+  bot.action(UNLINKED_USERS_ACTION, async (context) => {
+    clearAdminInputState(context.from.id);
+    await context.answerCbQuery();
+    await context.editMessageText(
+      await usersService.getUnlinkedUsersMessage(),
+      Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад к пользователям', USERS_ACTION)]]),
     );
   });
 
@@ -523,6 +538,45 @@ export function registerAdminPanelCommand(
         [Markup.button.callback('🗑 Да, удалить полностью', `udc:${userId}`)],
         [Markup.button.callback('⬅️ Отмена', `u:${userId}`)],
       ]),
+    );
+  });
+
+  bot.action(USER_UNDO_PAYMENT_CONFIRM_ACTION, async (context) => {
+    const userId = context.match[1];
+
+    if (userId === undefined) {
+      return;
+    }
+
+    await context.answerCbQuery();
+    await context.editMessageText(
+      [
+        '↩️ Отмена последней оплаты',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        await usersService.getUserCard(userId),
+        '',
+        'Будет удалена последняя подтвержденная оплата, а дата оплаченного доступа пересчитана по оставшейся истории.',
+      ].join('\n'),
+      Markup.inlineKeyboard([
+        [Markup.button.callback('↩️ Да, отменить последнюю оплату', `uuc:${userId}`)],
+        [Markup.button.callback('⬅️ Отмена', `u:${userId}`)],
+      ]),
+    );
+  });
+
+  bot.action(USER_UNDO_PAYMENT_ACTION, async (context) => {
+    const userId = context.match[1];
+
+    if (userId === undefined) {
+      return;
+    }
+
+    const result = await paymentsService.undoLastPaymentByUserId(userId);
+    await context.answerCbQuery('Оплата отменена');
+    await context.editMessageText(
+      paymentsService.formatUndoLastPayment(result),
+      Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад к карточке', `u:${userId}`)]]),
     );
   });
 

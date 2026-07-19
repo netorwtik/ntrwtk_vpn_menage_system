@@ -1,8 +1,11 @@
 import { Markup, type Context, type Telegraf } from 'telegraf';
 
 import type { PaymentClaimsService } from '../../modules/payment-claims/paymentClaims.service.js';
+import type { PaymentClaimMonths } from '../../modules/payment-claims/paymentClaims.types.js';
 import type { UserAccessService } from '../../modules/user-access/userAccess.service.js';
 import { userStatusKeyboard } from './status.keyboard.js';
+
+const CLAIM_MONTHS_ACTION = /^user_claim_payment:(1|2|3|6|12)$/;
 
 export function paymentCardKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
   return Markup.inlineKeyboard([
@@ -26,9 +29,33 @@ function claimSentKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
   ]);
 }
 
+function claimMonthsKeyboard(): ReturnType<typeof Markup.inlineKeyboard> {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('1 мес.', 'user_claim_payment:1'),
+      Markup.button.callback('2 мес.', 'user_claim_payment:2'),
+      Markup.button.callback('3 мес.', 'user_claim_payment:3'),
+    ],
+    [
+      Markup.button.callback('6 мес.', 'user_claim_payment:6'),
+      Markup.button.callback('12 мес.', 'user_claim_payment:12'),
+    ],
+    [Markup.button.callback('📋 Мой статус', 'user_status_card')],
+  ]);
+}
+
+function paymentPeriodMessage(): string {
+  return [
+    'Выберите период, за который вы оплатили VPN.',
+    '',
+    'Заявка будет отправлена администратору после выбора периода.',
+  ].join('\n');
+}
+
 async function createClaimAndNotifyAdmins(
   context: Context,
   telegramId: number,
+  months: PaymentClaimMonths,
   paymentClaimsService: PaymentClaimsService,
   userAccessService: UserAccessService,
   adminTelegramIds: ReadonlySet<number>,
@@ -39,7 +66,7 @@ async function createClaimAndNotifyAdmins(
     return paymentCard.message;
   }
 
-  const result = await paymentClaimsService.createClaim(telegramId);
+  const result = await paymentClaimsService.createClaim(telegramId, months);
 
   if (result.adminNotification !== null && result.claim !== null) {
     const notification = result.adminNotification;
@@ -92,9 +119,21 @@ export function registerPaymentClaimAction(
   });
 
   bot.action('user_claim_payment', async (context) => {
+    const paymentCard = await userAccessService.getPaymentCard(context.from.id);
+
+    await context.answerCbQuery();
+    await context.editMessageText(
+      paymentCard.paymentRequired ? paymentPeriodMessage() : paymentCard.message,
+      paymentCard.paymentRequired ? claimMonthsKeyboard() : paymentNotRequiredKeyboard(),
+    );
+  });
+
+  bot.action(CLAIM_MONTHS_ACTION, async (context) => {
+    const months = Number(context.match[1]) as PaymentClaimMonths;
     const message = await createClaimAndNotifyAdmins(
       context,
       context.from.id,
+      months,
       paymentClaimsService,
       userAccessService,
       adminTelegramIds,
@@ -111,15 +150,11 @@ export function registerPaymentClaimAction(
   });
 
   bot.hears(['✅ Я оплатил', 'Я оплатил'], async (context) => {
+    const paymentCard = await userAccessService.getPaymentCard(context.from.id);
+
     await context.reply(
-      await createClaimAndNotifyAdmins(
-        context,
-        context.from.id,
-        paymentClaimsService,
-        userAccessService,
-        adminTelegramIds,
-      ),
-      userStatusKeyboard(),
+      paymentCard.paymentRequired ? paymentPeriodMessage() : paymentCard.message,
+      paymentCard.paymentRequired ? claimMonthsKeyboard() : userStatusKeyboard(),
     );
   });
 }

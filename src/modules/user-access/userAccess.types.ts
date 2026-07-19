@@ -6,6 +6,7 @@ export interface AccessUser {
   telegramUsername: string | null;
   telegramId: bigint | null;
   monthlyPrice: Prisma.Decimal;
+  paymentDueDay: number | null;
   status: UserStatus;
   startedAt: Date;
   paidUntil: Date | null;

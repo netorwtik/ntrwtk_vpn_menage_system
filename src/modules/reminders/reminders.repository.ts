@@ -12,6 +12,7 @@ const OVERDUE_USER_SELECT = {
   telegramUsername: true,
   telegramId: true,
   monthlyPrice: true,
+  paymentDueDay: true,
   startedAt: true,
   paidUntil: true,
 } as const;
@@ -33,16 +34,19 @@ export class RemindersRepository {
     });
   }
 
-  public async findUsersForOverdueReminder(today: Date): Promise<OverdueReminderUser[]> {
+  public async findUsersForOverdueReminder(remindUntil: Date, reminderDate: Date): Promise<OverdueReminderUser[]> {
     const users = await this.database.user.findMany({
       where: {
         status: 'ACTIVE',
         telegramId: { not: null },
-        OR: [{ paidUntil: { lt: today } }, { paidUntil: null, startedAt: { lt: today } }],
+        OR: [
+          { paidUntil: { lte: remindUntil } },
+          { paidUntil: null, startedAt: { lte: remindUntil } },
+        ],
         reminderDeliveries: {
           none: {
             kind: ReminderKind.PAYMENT_OVERDUE,
-            reminderDate: today,
+            reminderDate,
           },
         },
       },

@@ -2,8 +2,8 @@ import { PaymentSource, type Prisma } from '@prisma/client';
 
 import {
   addCalendarDays,
-  addCalendarMonths,
   currentCalendarDate,
+  dateInUtcMonth,
   formatDate,
 } from '../../shared/date/date.utils.js';
 import { AppError } from '../../shared/errors/app-error.js';
@@ -13,6 +13,7 @@ import type {
   ConfirmedPaymentResult,
   PaymentHistoryResult,
   PaymentUser,
+  UndoLastPaymentResult,
 } from './payments.types.js';
 
 const USERNAME_PATTERN = /^@[A-Za-z0-9_]{5,32}$/;
@@ -93,8 +94,10 @@ export class PaymentsService {
     },
   ) {
     const months = this.calculatePaidMonths(amount, user.monthlyPrice);
-    const periodStart = this.calculatePeriodStart(user, details.paymentDate);
-    const periodEnd = addCalendarDays(addCalendarMonths(periodStart, months), -1);
+    const paymentDueDay = user.paymentDueDay ?? details.paymentDate.getUTCDate();
+    const basePeriodEnd = this.calculateBasePeriodEnd(user, details.paymentDate, paymentDueDay);
+    const periodStart = addCalendarDays(basePeriodEnd, 1);
+    const periodEnd = this.addBillingMonths(basePeriodEnd, months, paymentDueDay);
 
     return {
       amount,
@@ -103,6 +106,7 @@ export class PaymentsService {
       paymentDate: details.paymentDate,
       periodStart,
       periodEnd,
+      paymentDueDay,
       confirmedByTelegramId: details.confirmedByTelegramId,
       ...(details.comment === undefined ? {} : { comment: details.comment }),
     };
@@ -127,6 +131,30 @@ export class PaymentsService {
     }
 
     return this.formatHistoryResult(result, result.user.telegramUsername ?? '-');
+  }
+
+  public async undoLastPayment(telegramUsernameValue: string): Promise<UndoLastPaymentResult> {
+    const telegramUsername = this.normalizeUsername(telegramUsernameValue);
+    const result = await this.paymentsRepository.undoLastPayment(telegramUsername);
+
+    if (result === null) {
+      throw new AppError(
+        `У пользователя ${telegramUsername} нет подтвержденных оплат для отмены.`,
+        'PAYMENT_NOT_FOUND',
+      );
+    }
+
+    return result;
+  }
+
+  public async undoLastPaymentByUserId(userId: string): Promise<UndoLastPaymentResult> {
+    const result = await this.paymentsRepository.undoLastPaymentByUserId(userId);
+
+    if (result === null) {
+      throw new AppError('У пользователя нет подтвержденных оплат для отмены.', 'PAYMENT_NOT_FOUND');
+    }
+
+    return result;
   }
 
   private formatHistoryResult(result: PaymentHistoryResult, usernameLabel: string): string {
@@ -167,6 +195,18 @@ export class PaymentsService {
       `• Способ: ${result.payment.paymentMethod ?? 'не указан'}`,
       `• Период: ${formatDate(result.payment.periodStart)} - ${formatDate(result.payment.periodEnd)} (${months} мес.)`,
       `• Оплачено до: ${formatDate(result.payment.periodEnd)}`,
+    ].join('\n');
+  }
+
+  public formatUndoLastPayment(result: UndoLastPaymentResult): string {
+    return [
+      'Последняя оплата отменена.',
+      '',
+      `${result.user.name} (${result.user.telegramUsername ?? '-'})`,
+      `Отмененная оплата: ${formatDate(result.payment.paymentDate)} - ${formatMoney(result.payment.amount)}`,
+      `Период был: ${formatDate(result.payment.periodStart)} - ${formatDate(result.payment.periodEnd)}`,
+      `Оплачено до было: ${result.previousPaidUntil === null ? '-' : formatDate(result.previousPaidUntil)}`,
+      `Оплачено до сейчас: ${result.user.paidUntil === null ? '-' : formatDate(result.user.paidUntil)}`,
     ].join('\n');
   }
 
@@ -216,11 +256,37 @@ export class PaymentsService {
     return months;
   }
 
-  private calculatePeriodStart(user: PaymentUser, paymentDate: Date): Date {
+  private calculateBasePeriodEnd(
+    user: PaymentUser,
+    paymentDate: Date,
+    paymentDueDay: number,
+  ): Date {
     if (user.paidUntil !== null && user.paidUntil.getTime() >= paymentDate.getTime()) {
-      return addCalendarDays(user.paidUntil, 1);
+      return this.calculateDueDateInMonth(user.paidUntil, paymentDueDay);
     }
 
-    return paymentDate;
+    return this.calculateDueDateOnOrBefore(paymentDate, paymentDueDay);
+  }
+
+  private calculateDueDateOnOrBefore(date: Date, paymentDueDay: number): Date {
+    const dueDate = this.calculateDueDateInMonth(date, paymentDueDay);
+
+    if (dueDate.getTime() <= date.getTime()) {
+      return dueDate;
+    }
+
+    return dateInUtcMonth(date.getUTCFullYear(), date.getUTCMonth() - 1, paymentDueDay);
+  }
+
+  private calculateDueDateInMonth(date: Date, paymentDueDay: number): Date {
+    return dateInUtcMonth(date.getUTCFullYear(), date.getUTCMonth(), paymentDueDay);
+  }
+
+  private addBillingMonths(basePeriodEnd: Date, months: number, paymentDueDay: number): Date {
+    return dateInUtcMonth(
+      basePeriodEnd.getUTCFullYear(),
+      basePeriodEnd.getUTCMonth() + months,
+      paymentDueDay,
+    );
   }
 }

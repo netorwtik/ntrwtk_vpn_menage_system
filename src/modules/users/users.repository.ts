@@ -2,66 +2,45 @@ import type { Prisma, PrismaClient, UserStatus } from '@prisma/client';
 
 import type { CreateUserInput, UserListItem } from './users.types.js';
 
+const USER_LIST_SELECT = {
+  id: true,
+  name: true,
+  telegramUsername: true,
+  monthlyPrice: true,
+  paymentDueDay: true,
+  status: true,
+  startedAt: true,
+  paidUntil: true,
+} as const;
+
 export class UsersRepository {
   public constructor(private readonly database: PrismaClient) {}
 
   public async create(input: CreateUserInput): Promise<UserListItem> {
     return this.database.user.create({
       data: input,
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
     });
   }
 
   public async findByTelegramUsername(telegramUsername: string): Promise<UserListItem | null> {
     return this.database.user.findUnique({
       where: { telegramUsername },
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
     });
   }
 
   public async findById(id: string): Promise<UserListItem | null> {
     return this.database.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
     });
   }
 
   public async findAll(): Promise<UserListItem[]> {
     return this.database.user.findMany({
       orderBy: [{ status: 'asc' }, { name: 'asc' }],
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
     });
   }
 
@@ -69,15 +48,15 @@ export class UsersRepository {
     return this.database.user.findMany({
       where: { status: 'ACTIVE' },
       orderBy: [{ paidUntil: 'asc' }, { name: 'asc' }],
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
+    });
+  }
+
+  public async findUnlinked(): Promise<UserListItem[]> {
+    return this.database.user.findMany({
+      where: { telegramId: null },
+      orderBy: [{ status: 'asc' }, { name: 'asc' }],
+      select: USER_LIST_SELECT,
     });
   }
 
@@ -85,15 +64,7 @@ export class UsersRepository {
     return this.database.user.update({
       where: { id },
       data: { monthlyPrice },
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
     });
   }
 
@@ -101,15 +72,7 @@ export class UsersRepository {
     return this.database.user.update({
       where: { id },
       data: { status },
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
     });
   }
 
@@ -117,30 +80,14 @@ export class UsersRepository {
     return this.database.user.update({
       where: { id },
       data: { paidUntil },
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
     });
   }
 
   public async delete(id: string): Promise<UserListItem> {
     return this.database.user.delete({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        telegramUsername: true,
-        monthlyPrice: true,
-        status: true,
-        startedAt: true,
-        paidUntil: true,
-      },
+      select: USER_LIST_SELECT,
     });
   }
 }

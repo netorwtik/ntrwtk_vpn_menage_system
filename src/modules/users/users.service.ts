@@ -1,4 +1,4 @@
-import { UserStatus } from '@prisma/client';
+import { Prisma, UserStatus } from '@prisma/client';
 
 import {
   addCalendarDays,
@@ -47,6 +47,7 @@ export interface AdminDashboardStats {
   activeUsersCount: number;
   debtorsCount: number;
   upcomingPaymentsCount: number;
+  monthlyTotal: Prisma.Decimal;
 }
 
 export class UsersService {
@@ -96,6 +97,7 @@ export class UsersService {
       `• Username: ${user.telegramUsername ?? '-'}`,
       `• Статус: ${STATUS_LABELS[user.status]}`,
       `• Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+      `• День оплаты: ${this.formatPaymentDueDay(user.paymentDueDay)}`,
       '',
       '💳 Оплата',
       `• Оплачено до: ${this.formatPaidUntil(user.paidUntil, today)}`,
@@ -114,7 +116,36 @@ export class UsersService {
       activeUsersCount: activeUsers.length,
       debtorsCount: dueDays.filter((days) => days < 0).length,
       upcomingPaymentsCount: dueDays.filter((days) => days >= 0 && days <= daysBefore).length,
+      monthlyTotal: activeUsers.reduce(
+        (total, user) => total.plus(user.monthlyPrice),
+        new Prisma.Decimal(0),
+      ),
     };
+  }
+
+  public async getUnlinkedUsersMessage(): Promise<string> {
+    const users = await this.usersRepository.findUnlinked();
+
+    if (users.length === 0) {
+      return ['✅ Пользователи без Telegram-привязки', '━━━━━━━━━━━━━━━━━━━━', '', 'Таких пользователей нет.'].join('\n');
+    }
+
+    const rows = users.map((user, index) => {
+      return [
+        `${index + 1}. ${user.name} (${user.telegramUsername ?? '-'})`,
+        `   • Статус: ${STATUS_LABELS[user.status]}`,
+        `   • Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+      ].join('\n');
+    });
+
+    return [
+      '🔗 Пользователи без Telegram-привязки',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      `Всего: ${users.length}`,
+      '',
+      ...rows,
+    ].join('\n\n');
   }
 
   public async setPrice(request: SetPriceRequest): Promise<UserListItem> {
@@ -247,6 +278,7 @@ export class UsersService {
       '',
       `${user.name} (${user.telegramUsername ?? '-'})`,
       `Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+      `День оплаты: ${this.formatPaymentDueDay(user.paymentDueDay)}`,
       `Статус: ${STATUS_LABELS[user.status]}`,
       'Оплачено до: оплата не зафиксирована',
     ].join('\n');
@@ -267,6 +299,7 @@ export class UsersService {
       return [
         `${index + 1}. ${user.name} (${user.telegramUsername ?? '-'})`,
         `   • Тариф: ${formatMoney(user.monthlyPrice)} / месяц`,
+        `   • День оплаты: ${this.formatPaymentDueDay(user.paymentDueDay)}`,
         `   • Статус: ${STATUS_LABELS[user.status]}`,
         `   • Оплачено до: ${this.formatPaidUntil(user.paidUntil, today)}`,
       ].join('\n');
@@ -397,6 +430,10 @@ export class UsersService {
     }
 
     return `${formatDate(paidUntil)} (осталось ${days} дн.)`;
+  }
+
+  private formatPaymentDueDay(paymentDueDay: number | null): string {
+    return paymentDueDay === null ? 'будет задан после первой оплаты' : String(paymentDueDay);
   }
 
   private getDaysUntilDue(user: UserListItem, today: Date): number {

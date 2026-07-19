@@ -5,6 +5,7 @@ import type {
   CreateConfirmedPaymentData,
   PaymentHistoryResult,
   PaymentUser,
+  UndoLastPaymentResult,
 } from './payments.types.js';
 
 const USER_SELECT = {
@@ -13,6 +14,7 @@ const USER_SELECT = {
   telegramUsername: true,
   telegramId: true,
   monthlyPrice: true,
+  paymentDueDay: true,
   status: true,
   paidUntil: true,
 } as const;
@@ -46,16 +48,17 @@ export class PaymentsRepository {
       }
 
       const paymentData = buildPaymentData(user);
+      const { paymentDueDay, ...paymentCreateData } = paymentData;
       const payment = await transaction.payment.create({
         data: {
           userId: user.id,
-          ...paymentData,
+          ...paymentCreateData,
         },
         select: PAYMENT_SELECT,
       });
       const updatedUser = await transaction.user.update({
         where: { id: user.id },
-        data: { paidUntil: paymentData.periodEnd },
+        data: { paidUntil: paymentData.periodEnd, paymentDueDay },
         select: USER_SELECT,
       });
 
@@ -113,6 +116,64 @@ export class PaymentsRepository {
     return { user: paymentUser, payments };
   }
 
+  public async undoLastPayment(telegramUsername: string): Promise<UndoLastPaymentResult | null> {
+    return this.undoLastPaymentByUserWhere({ telegramUsername });
+  }
+
+  public async undoLastPaymentByUserId(userId: string): Promise<UndoLastPaymentResult | null> {
+    return this.undoLastPaymentByUserWhere({ id: userId });
+  }
+
+  private async undoLastPaymentByUserWhere(
+    where: { id: string } | { telegramUsername: string },
+  ): Promise<UndoLastPaymentResult | null> {
+    return this.database.$transaction(async (transaction) => {
+      const user = await transaction.user.findUnique({
+        where,
+        select: {
+          ...USER_SELECT,
+          payments: {
+            orderBy: [{ paymentDate: 'desc' }, { createdAt: 'desc' }],
+            take: 1,
+            select: PAYMENT_SELECT,
+          },
+        },
+      });
+
+      if (user === null || user.payments.length === 0) {
+        return null;
+      }
+
+      const [payment] = user.payments;
+
+      if (payment === undefined) {
+        return null;
+      }
+
+      await transaction.payment.delete({ where: { id: payment.id } });
+
+      const remainingPayments = await transaction.payment.findMany({
+        where: { userId: user.id },
+        orderBy: [{ paymentDate: 'asc' }, { createdAt: 'asc' }],
+        select: {
+          paymentDate: true,
+          periodEnd: true,
+        },
+      });
+      const firstRemainingPayment = remainingPayments[0];
+      const lastRemainingPayment = remainingPayments.at(-1);
+      const paymentDueDay =
+        firstRemainingPayment === undefined ? null : firstRemainingPayment.paymentDate.getUTCDate();
+      const paidUntil = lastRemainingPayment?.periodEnd ?? null;
+      const updatedUser = await transaction.user.update({
+        where: { id: user.id },
+        data: { paidUntil, paymentDueDay },
+        select: USER_SELECT,
+      });
+      return { user: updatedUser, payment, previousPaidUntil: user.paidUntil };
+    });
+  }
+
   public async confirmPendingClaim(
     claimId: string,
     buildPaymentData: (
@@ -136,13 +197,14 @@ export class PaymentsRepository {
       }
 
       const paymentData = buildPaymentData(claim.user, claim.amount);
+      const { paymentDueDay, ...paymentCreateData } = paymentData;
       const payment = await transaction.payment.create({
-        data: { userId: claim.user.id, ...paymentData },
+        data: { userId: claim.user.id, ...paymentCreateData },
         select: PAYMENT_SELECT,
       });
       const user = await transaction.user.update({
         where: { id: claim.user.id },
-        data: { paidUntil: paymentData.periodEnd },
+        data: { paidUntil: paymentData.periodEnd, paymentDueDay },
         select: USER_SELECT,
       });
       await transaction.paymentClaim.update({

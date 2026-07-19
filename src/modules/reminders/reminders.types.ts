@@ -6,6 +6,7 @@ export interface OverdueReminderUser {
   telegramUsername: string | null;
   telegramId: bigint;
   monthlyPrice: Prisma.Decimal;
+  paymentDueDay: number | null;
   startedAt: Date;
   paidUntil: Date | null;
 }
@@ -16,6 +17,7 @@ export interface ManualReminderUser {
   telegramUsername: string | null;
   telegramId: bigint | null;
   monthlyPrice: Prisma.Decimal;
+  paymentDueDay: number | null;
   startedAt: Date;
   paidUntil: Date | null;
 }

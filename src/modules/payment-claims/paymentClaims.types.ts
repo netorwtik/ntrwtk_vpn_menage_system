@@ -16,6 +16,8 @@ export interface PendingPaymentClaim {
   user: PaymentClaimUser;
 }
 
+export type PaymentClaimMonths = 1 | 2 | 3 | 6 | 12;
+
 export type CreatePaymentClaimResult =
   | { status: 'created'; claim: PendingPaymentClaim }
   | { status: 'existing'; claim: PendingPaymentClaim }

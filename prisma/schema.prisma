@@ -34,6 +34,7 @@ model User {
   telegramUsername   String?            @unique @map("telegram_username")
   telegramId         BigInt?            @unique @map("telegram_id")
   monthlyPrice       Decimal            @map("monthly_price") @db.Decimal(10, 2)
+  paymentDueDay      Int?               @map("payment_due_day")
   status             UserStatus         @default(ACTIVE)
   startedAt          DateTime           @default(now()) @map("started_at") @db.Date
   paidUntil          DateTime?          @map("paid_until") @db.Date

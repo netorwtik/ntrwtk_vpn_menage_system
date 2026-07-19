@@ -27,6 +27,8 @@ import { registerRemindCommand } from './admin/commands/remind.command.js';
 import { registerSetPriceCommand } from './admin/commands/setPrice.command.js';
 import { registerSetPaidUntilCommand } from './admin/commands/setPaidUntil.command.js';
 import { registerSetStatusCommand } from './admin/commands/setStatus.command.js';
+import { registerUndoPaymentCommand } from './admin/commands/undoPayment.command.js';
+import { registerUnlinkedCommand } from './admin/commands/unlinked.command.js';
 import { registerUsersCommand } from './admin/commands/users.command.js';
 import { adminOnly } from './admin/middlewares/adminOnly.middleware.js';
 import { registerUserStartCommand } from './user/start.command.js';
@@ -86,9 +88,11 @@ export function createBot(config: AppConfig, logger: Logger): BotRuntime {
   registerSetPaidUntilCommand(bot, usersService);
   registerSetStatusCommand(bot, usersService);
   registerPaidCommand(bot, paymentsService);
+  registerUndoPaymentCommand(bot, paymentsService);
   registerHistoryCommand(bot, paymentsService);
   registerDebtorsCommand(bot, usersService);
   registerRemindCommand(bot, usersService, config.remindDaysBefore);
+  registerUnlinkedCommand(bot, usersService);
   registerInviteCommand(bot, userAccessService);
   registerReviewPaymentClaimActions(bot, paymentClaimsService, paymentsService);
 
@@ -139,9 +143,11 @@ export async function startBot(
     { command: 'set_paid_until', description: 'Исправить дату оплаты' },
     { command: 'set_status', description: 'Изменить статус пользователя' },
     { command: 'paid', description: 'Подтвердить полученную оплату' },
+    { command: 'undo_payment', description: 'Отменить последнюю оплату' },
     { command: 'history', description: 'Показать историю оплат' },
     { command: 'debtors', description: 'Показать просроченные оплаты' },
     { command: 'remind', description: 'Показать ближайшие оплаты' },
+    { command: 'unlinked', description: 'Показать пользователей без Telegram' },
     { command: 'invite', description: 'Выдать ссылку пользователю' },
     { command: 'status', description: 'Мой статус VPN' },
   ];

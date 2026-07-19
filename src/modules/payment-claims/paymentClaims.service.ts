@@ -2,7 +2,7 @@ import { formatDate } from '../../shared/date/date.utils.js';
 import { AppError } from '../../shared/errors/app-error.js';
 import { formatMoney } from '../../shared/money/money.utils.js';
 import type { PaymentClaimsRepository } from './paymentClaims.repository.js';
-import type { PendingPaymentClaim } from './paymentClaims.types.js';
+import type { PaymentClaimMonths, PendingPaymentClaim } from './paymentClaims.types.js';
 
 export class PaymentClaimsService {
   public constructor(private readonly repository: PaymentClaimsRepository) {}
@@ -37,12 +37,15 @@ export class PaymentClaimsService {
     ].join('\n');
   }
 
-  public async createClaim(telegramId: number): Promise<{
+  public async createClaim(
+    telegramId: number,
+    months: PaymentClaimMonths,
+  ): Promise<{
     userMessage: string;
     adminNotification: string | null;
     claim: PendingPaymentClaim | null;
   }> {
-    const result = await this.repository.createForTelegramId(BigInt(telegramId));
+    const result = await this.repository.createForTelegramId(BigInt(telegramId), months);
 
     if (result.status === 'user_not_linked') {
       throw new AppError(
@@ -53,21 +56,34 @@ export class PaymentClaimsService {
 
     if (result.status === 'existing') {
       return {
-        userMessage:
-          'Ваша заявка об оплате уже отправлена администратору. Доступ будет продлён после проверки перевода.',
+        userMessage: [
+          'Ваша заявка об оплате уже ожидает проверки администратора.',
+          '',
+          `• Сумма: ${formatMoney(result.claim.amount)}`,
+          `• Создана: ${formatDate(result.claim.createdAt)}`,
+          '',
+          'Новая заявка не создана, чтобы не было дублей.',
+        ].join('\n'),
         adminNotification: null,
         claim: null,
       };
     }
 
     return {
-      userMessage:
-        'Заявка об оплате отправлена администратору. Доступ будет продлён только после подтверждения перевода.',
+      userMessage: [
+        'Заявка об оплате отправлена администратору.',
+        '',
+        `• Период: ${months} мес.`,
+        `• Сумма: ${formatMoney(result.claim.amount)}`,
+        '',
+        'Доступ будет продлён только после подтверждения перевода.',
+      ].join('\n'),
       adminNotification: [
         '🧾 Пользователь сообщил об оплате.',
         '━━━━━━━━━━━━━━━━━━━━',
         '',
         `• ${result.claim.user.name} (${result.claim.user.telegramUsername ?? '-'})`,
+        `• Период: ${months} мес.`,
         `• Ожидаемая сумма: ${formatMoney(result.claim.amount)}`,
         `• Дата заявки: ${formatDate(result.claim.createdAt)}`,
       ].join('\n'),

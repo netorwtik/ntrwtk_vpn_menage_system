@@ -6,6 +6,7 @@ export interface PaymentUser {
   telegramUsername: string | null;
   telegramId: bigint | null;
   monthlyPrice: Prisma.Decimal;
+  paymentDueDay: number | null;
   status: UserStatus;
   paidUntil: Date | null;
 }
@@ -17,6 +18,7 @@ export interface CreateConfirmedPaymentData {
   paymentDate: Date;
   periodStart: Date;
   periodEnd: Date;
+  paymentDueDay: number;
   confirmedByTelegramId: bigint;
   comment?: string;
 }
@@ -40,4 +42,10 @@ export interface ConfirmedPaymentResult {
 export interface PaymentHistoryResult {
   user: PaymentUser;
   payments: ConfirmedPaymentRecord[];
+}
+
+export interface UndoLastPaymentResult {
+  user: PaymentUser;
+  payment: ConfirmedPaymentRecord;
+  previousPaidUntil: Date | null;
 }

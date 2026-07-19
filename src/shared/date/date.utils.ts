@@ -83,3 +83,13 @@ export function addCalendarMonths(date: Date, amount: number): Date {
 
   return new Date(Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth(), day));
 }
+
+export function getLastDayOfUtcMonth(year: number, monthIndex: number): number {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+export function dateInUtcMonth(year: number, monthIndex: number, day: number): Date {
+  const clampedDay = Math.min(day, getLastDayOfUtcMonth(year, monthIndex));
+
+  return new Date(Date.UTC(year, monthIndex, clampedDay));
+}

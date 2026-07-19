@@ -8,6 +8,7 @@ const ACCESS_USER_SELECT = {
   telegramUsername: true,
   telegramId: true,
   monthlyPrice: true,
+  paymentDueDay: true,
   status: true,
   startedAt: true,
   paidUntil: true,

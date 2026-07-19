@@ -2,7 +2,12 @@ import type { Telegram } from 'telegraf';
 import type { Logger } from 'pino';
 
 import type { PaymentInfoConfig } from '../../config/env.js';
-import { currentCalendarDate, differenceInDays, formatDate } from '../../shared/date/date.utils.js';
+import {
+  addCalendarDays,
+  currentCalendarDate,
+  differenceInDays,
+  formatDate,
+} from '../../shared/date/date.utils.js';
 import { formatMoney } from '../../shared/money/money.utils.js';
 import { paymentCardKeyboard } from '../../bot/user/paymentClaim.action.js';
 import type { RemindersRepository } from './reminders.repository.js';
@@ -22,7 +27,7 @@ export class RemindersService {
     failed: number;
   }> {
     const today = currentCalendarDate(this.timeZone);
-    const users = await this.repository.findUsersForOverdueReminder(today);
+    const users = await this.repository.findUsersForOverdueReminder(addCalendarDays(today, 1), today);
     let sent = 0;
     let failed = 0;
 
@@ -95,13 +100,15 @@ export class RemindersService {
 
   private formatOverdueReminder(user: OverdueReminderUser, today: Date): string {
     const dueDate = user.paidUntil ?? user.startedAt;
-    const overdueDays = Math.abs(differenceInDays(dueDate, today));
+    const daysUntilDue = differenceInDays(dueDate, today);
+    const paymentState = this.formatPaymentState(daysUntilDue);
+
     return [
       '⚠️ Напоминание об оплате VPN',
       '━━━━━━━━━━━━━━━━━━━━',
       '',
       '📌 Состояние оплаты',
-      `• Ваш доступ просрочен на ${overdueDays} дн.`,
+      paymentState,
       `• Оплачено до: ${user.paidUntil === null ? 'оплата не зафиксирована' : formatDate(user.paidUntil)}`,
       `• К оплате: ${formatMoney(user.monthlyPrice)}`,
       '',
@@ -111,6 +118,18 @@ export class RemindersService {
       '✅ После перевода нажмите «Я оплатил».',
       'Уведомления прекратятся только после подтверждения администратором.',
     ].join('\n');
+  }
+
+  private formatPaymentState(daysUntilDue: number): string {
+    if (daysUntilDue > 0) {
+      return `• Оплата через ${daysUntilDue} дн.`;
+    }
+
+    if (daysUntilDue === 0) {
+      return '• Сегодня день оплаты.';
+    }
+
+    return `• Ваш доступ просрочен на ${Math.abs(daysUntilDue)} дн.`;
   }
 
   private formatManualReminder(user: ManualReminderUser): string {

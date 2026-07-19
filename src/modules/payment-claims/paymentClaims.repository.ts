@@ -1,6 +1,10 @@
 import type { PrismaClient } from '@prisma/client';
 
-import type { CreatePaymentClaimResult, PendingPaymentClaim } from './paymentClaims.types.js';
+import type {
+  CreatePaymentClaimResult,
+  PaymentClaimMonths,
+  PendingPaymentClaim,
+} from './paymentClaims.types.js';
 
 const CLAIM_SELECT = {
   id: true,
@@ -36,7 +40,10 @@ export class PaymentClaimsRepository {
     });
   }
 
-  public async createForTelegramId(telegramId: bigint): Promise<CreatePaymentClaimResult> {
+  public async createForTelegramId(
+    telegramId: bigint,
+    months: PaymentClaimMonths,
+  ): Promise<CreatePaymentClaimResult> {
     return this.database.$transaction(async (transaction) => {
       const user = await transaction.user.findUnique({
         where: { telegramId },
@@ -61,7 +68,7 @@ export class PaymentClaimsRepository {
       }
 
       const claim = await transaction.paymentClaim.create({
-        data: { userId: user.id, amount: user.monthlyPrice },
+        data: { userId: user.id, amount: user.monthlyPrice.mul(months) },
         select: CLAIM_SELECT,
       });
 

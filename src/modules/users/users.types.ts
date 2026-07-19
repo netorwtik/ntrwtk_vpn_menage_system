@@ -13,6 +13,7 @@ export interface UserListItem {
   name: string;
   telegramUsername: string | null;
   monthlyPrice: Prisma.Decimal;
+  paymentDueDay: number | null;
   status: UserStatus;
   startedAt: Date;
   paidUntil: Date | null;
