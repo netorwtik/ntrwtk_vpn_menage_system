@@ -52,6 +52,7 @@ jobs:
           fi
 
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d postgres
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" build migrate
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" run --rm migrate
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --build bot
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps
