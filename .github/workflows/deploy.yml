@@ -53,7 +53,7 @@ jobs:
 
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d postgres
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" build migrate
-          docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" run -T --rm migrate
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" run -T --rm migrate < /dev/null
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --build bot
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps
           docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" logs --tail=80 bot
